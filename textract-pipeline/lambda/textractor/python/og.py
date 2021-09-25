@@ -4,7 +4,7 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -12,19 +12,42 @@ class OutputGenerator:
         self.forms = forms
         self.tables = tables
         self.ddb = ddb
+        self.ddb_form = ddb_form
+        print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
 
         self.document = Document(self.response)
 
     def saveItem(self, pk, sk, output):
-
+        # Where database is saving its output
         jsonItem = {}
         jsonItem['documentId'] = pk
         jsonItem['outputType'] = sk
         jsonItem['outputPath'] = output
 
         self.ddb.put_item(Item=jsonItem)
+
+    def saveForm(self, pk, page, p):
+        # Where database is saving its form details
+        print("STARTED SAVEFORM FUNCTION")
+        
+        # Initiate the DynamoDB jsonItem
+        jsonItem = {}
+        jsonItem['documentId'] = pk
+        jsonItem['page'] = p
+
+        print("STARTED FOR LOOP")
+        # Export all of the document page's form's fields as key/value pairs
+        for field in page.form.fields:
+            if(field.key) and if(field.value):
+                jsonItem[field.key.text] = str(field.value.text)
+        print("FINISHED FOR LOOP")
+
+        # Put that thing where it belongs
+        print("STARTED PUT_ITEM")
+        self.ddb_form.put_item(Item=jsonItem)
+        print("FINISHED PUT_ITEM")
 
     def _outputText(self, page, p):
         text = page.text
@@ -39,10 +62,10 @@ class OutputGenerator:
 
     def _outputForm(self, page, p):
         csvData = []
-        for field in page.form.fields:
+        for field in page.form.fields: #Field contains a key/value pair
             csvItem  = []
             if(field.key):
-                csvItem.append(field.key.text)
+                csvItem.append(field.key.text) #append key to csvFieldNames (wouldn't work with more than 1 file)
             else:
                 csvItem.append("")
             if(field.value):
@@ -50,7 +73,7 @@ class OutputGenerator:
             else:
                 csvItem.append("")
             csvData.append(csvItem)
-        csvFieldNames = ['Key', 'Value']
+        csvFieldNames = ['Key', 'Value'] #Delete
         opath = "{}page-{}-forms.csv".format(self.outputPath, p)
         S3Helper.writeCSV(csvFieldNames, csvData, self.bucketName, opath)
         self.saveItem(self.documentId, "page-{}-Forms".format(p), opath)
@@ -93,6 +116,10 @@ class OutputGenerator:
             opath = "{}page-{}-response.json".format(self.outputPath, p)
             S3Helper.writeToS3(json.dumps(page.blocks), self.bucketName, opath)
             self.saveItem(self.documentId, "page-{}-Response".format(p), opath)
+            print("STARTED SAVEFORM IN RUN")
+            self.saveForm(self.documentId, page, p)
+            print("FINISHED SAVE FORM IN RUN")
+
 
             self._outputText(page, p)
 

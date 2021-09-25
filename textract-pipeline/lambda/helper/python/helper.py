@@ -136,10 +136,10 @@ class S3Helper:
         writer = csv.DictWriter(csv_file, fieldnames=fieldNames)
         writer.writeheader()
 
-        for item in csvData:
+        for item in csvData: #item is a row
             i = 0
             row = {}
-            for value in item:
+            for value in item: #value is one cell in that row
                 row[fieldNames[i]] = value
                 i = i + 1
             writer.writerow(row)

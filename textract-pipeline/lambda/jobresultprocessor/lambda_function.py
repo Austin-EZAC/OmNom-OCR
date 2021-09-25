@@ -72,7 +72,15 @@ def processRequest(request):
     dynamodb = AwsHelper().getResource('dynamodb')
     ddb = dynamodb.Table(outputTable)
 
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb)
+    # Delete all cap print statements
+    print("STARTING TO RUN DDB_FORM TABLE SEARCH")
+    ddb_form = dynamodb.Table("Output-Forms")
+    print("FINISHED RUN DDB_FORM TABLE SEARCH")
+
+    print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb, ddb_form)
+    print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
+
     opg.run()
 
     print("DocumentId: {}".format(jobTag))

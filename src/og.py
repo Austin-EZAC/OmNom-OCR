@@ -40,7 +40,7 @@ class OutputGenerator:
         print("STARTED FOR LOOP")
         # Export all of the document page's form's fields as key/value pairs
         for field in page.form.fields:
-            if(field.key) and if(field.value):
+            if field.key and field.value:
                 jsonItem[field.key.text] = str(field.value.text)
         print("FINISHED FOR LOOP")
 

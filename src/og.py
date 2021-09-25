@@ -72,11 +72,13 @@ class OutputGenerator:
             print("TABLE: {}".format(table))
             
             # For each table, get the column headers from the first row
-            column_headers = list(table.rows[0])
-            print("COLUMN HEADERS: {}".format(column_headers))
+            # column_headers = list(table.rows[0])
+            # print("COLUMN HEADERS: {}".format(column_headers))
+            rows = list(table.rows)
+            column_headers = list(rows[0])
 
             # Loop through remaining rows
-            for row_i, row in enumerate(table.rows[1:], 1):  
+            for row_i, row in enumerate(rows[1:], 1):  
                 print("ROW: {}".format(row))
 
                 # Initiate the DynamoDB jsonItem

@@ -37,6 +37,9 @@ class OutputGenerator:
         jsonItem = {}
         jsonItem['documentId'] = pk
 
+        print("jsonItem - {}".format(jsonItem))
+        print("ddb_form - {}".format(self.ddb_form))
+
         self.ddb_form.put_item(Item=jsonItem)
 
         # jsonItem['page'] = p
@@ -50,7 +53,7 @@ class OutputGenerator:
 
         # # Put that thing where it belongs
         # print("STARTED PUT_ITEM")
-        # print(jsonItem)
+        
         # self.ddb_form.put_item(Item=jsonItem)
         # print("FINISHED PUT_ITEM")
 

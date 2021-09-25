@@ -4,7 +4,7 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -12,6 +12,8 @@ class OutputGenerator:
         self.forms = forms
         self.tables = tables
         self.ddb = ddb
+        self.ddb_form = ddb_form
+        print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
 
@@ -25,6 +27,27 @@ class OutputGenerator:
         jsonItem['outputPath'] = output
 
         self.ddb.put_item(Item=jsonItem)
+
+    def saveForm(self, pk, page, p):
+        # Where database is saving its form details
+        print("STARTED SAVEFORM FUNCTION")
+        
+        # Initiate the DynamoDB jsonItem
+        jsonItem = {}
+        jsonItem['documentId'] = pk
+        jsonItem['page'] = p
+
+        print("STARTED FOR LOOP")
+        # Export all of the document page's form's fields as key/value pairs
+        for field in page.form.fields:
+            if(field.key) and if(field.value):
+                jsonItem[field.key.text] = str(field.value.text)
+        print("FINISHED FOR LOOP")
+
+        # Put that thing where it belongs
+        print("STARTED PUT_ITEM")
+        self.ddb_form.put_item(Item=jsonItem)
+        print("FINISHED PUT_ITEM")
 
     def _outputText(self, page, p):
         text = page.text
@@ -93,6 +116,10 @@ class OutputGenerator:
             opath = "{}page-{}-response.json".format(self.outputPath, p)
             S3Helper.writeToS3(json.dumps(page.blocks), self.bucketName, opath)
             self.saveItem(self.documentId, "page-{}-Response".format(p), opath)
+            print("STARTED SAVEFORM IN RUN")
+            self.saveForm(self.documentId, page, p)
+            print("FINISHED SAVE FORM IN RUN")
+
 
             self._outputText(page, p)
 

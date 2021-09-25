@@ -84,24 +84,24 @@ class OutputGenerator:
             # column_headers = list(rows[0])
 
             # Loop through remaining rows
-            for row_i, row in enumerate(table.rows, 1):  
+            for row_i, row in enumerate(table.rows):  
                 print("ROW #{}: {}".format(row_i, row))
 
                 # Initiate the DynamoDB jsonItem
                 jsonItem = {}
-                jsonItem['recordId'] = "{}-{}-{}-{}".format(pk, p, table_i, row_i)
+                jsonItem['recordId'] = "{}-{}-{}".format(pk, p, table_i)
                 jsonItem['documentId'] = pk
                 jsonItem['pageNumber'] = p
                 jsonItem['tableNumber'] = table_i
                 jsonItem['rowNumber'] = row_i
-                
 
 
-                if row_i == 1:
+                if row_i == 0:
                     # Get the column headers from the first row
                     for cell in row.cells:
                         column_headers.append(cell.text)
                         print("COLUMN HEADERS: {}".format(column_headers))
+                    continue
                 else:
                     # Build out database table row records to import 
                     for cell_i, cell in enumerate(row.cells):

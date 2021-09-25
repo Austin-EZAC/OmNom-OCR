@@ -70,16 +70,22 @@ class OutputGenerator:
         # Export all of the document page's table's rows of cells as lists of lists of a list
         for table_i, table in enumerate(page.tables, 1):
             print("TABLE: {}".format(table))
+            print("TABLE ROWS: {}".format(table.rows))
             
+            column_headers = []
+
             # For each table, get the column headers from the first row
             # column_headers = list(table.rows[0])
             # print("COLUMN HEADERS: {}".format(column_headers))
-            rows = list(table.rows)
-            column_headers = list(rows[0])
+            
+            
+            # rows = list(table.rows)
+            # print(rows)
+            # column_headers = list(rows[0])
 
             # Loop through remaining rows
-            for row_i, row in enumerate(rows[1:], 1):  
-                print("ROW: {}".format(row))
+            for row_i, row in enumerate(table.rows, 1):  
+                print("ROW #{}: {}".format(row_i, row))
 
                 # Initiate the DynamoDB jsonItem
                 jsonItem = {}
@@ -88,15 +94,25 @@ class OutputGenerator:
                 jsonItem['tableNumber'] = table_i
                 jsonItem['rowNumber'] = row_i
 
-                # Build out database table row records to import 
-                for cell_i, cell in enumerate(row.cells):
-                    column_header = column_headers[cell_i]
-                    jsonItem[column_header] = cell.text
+
+
+                if row_i == 1:
+                    # Get the column headers from the first row
+                    for cell in row.cells:
+                        column_headers.append(cell.text)
+                        print("COLUMN HEADERS: {}".format(column_headers))
+                else:
+                    # Build out database table row records to import 
+                    for cell_i, cell in enumerate(row.cells):
+                        print('cell_i: {}'.format(cell_i))
+                        column_header = column_headers[cell_i]
+                        print('column_header: {}'.format(column_header))
+                        jsonItem[column_header] = cell.text
                 
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))
                 print("STARTED PUT_ITEM")
-                self.ddb_table.put_item(Item=jsonItem)
+                ddb_put_response = self.ddb_table.put_item(Item=jsonItem)
                 print("FINISHED PUT_ITEM")
 
         print("FINISHED TABLE FOR LOOP")

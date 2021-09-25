@@ -41,7 +41,7 @@ class OutputGenerator:
 
         # self.ddb_form.put_item(Item=jsonItem)
 
-        jsonItem['page'] = p
+        jsonItem['pageNumber'] = p
 
         print("STARTED FOR LOOP")
         # Export all of the document page's form's fields as key/value pairs

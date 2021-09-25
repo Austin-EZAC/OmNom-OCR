@@ -78,10 +78,12 @@ def processRequest(request):
     # print("OUTPUT FORMS TABLE: {}".format(outputFormsTable))
     ddb_form = dynamodb.Table("Output-Forms")
     print("ddb_form: {}".format(ddb_form))
+    ddb_table = dynamodb.Table("Output-Tables")
+    print("ddb_table: {}".format(ddb_table))
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb, ddb_form)
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb, ddb_form, ddb_table)
     print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
 
     opg.run()

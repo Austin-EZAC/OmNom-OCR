@@ -4,7 +4,7 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form, ddb_table):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName

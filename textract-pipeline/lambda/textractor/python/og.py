@@ -72,6 +72,8 @@ class OutputGenerator:
             print("TABLE: {}".format(table))
             print("TABLE ROWS: {}".format(table.rows))
             
+            column_headers = []
+
             # For each table, get the column headers from the first row
             # column_headers = list(table.rows[0])
             # print("COLUMN HEADERS: {}".format(column_headers))
@@ -87,17 +89,19 @@ class OutputGenerator:
 
                 # Initiate the DynamoDB jsonItem
                 jsonItem = {}
+                jsonItem['recordId'] = "{}-{}-{}-{}".format(pk, p, table_i, row_i)
                 jsonItem['documentId'] = pk
                 jsonItem['pageNumber'] = p
                 jsonItem['tableNumber'] = table_i
                 jsonItem['rowNumber'] = row_i
+                
 
-                column_headers = []
 
                 if row_i == 1:
                     # Get the column headers from the first row
                     for cell in row.cells:
                         column_headers.append(cell.text)
+                        print("COLUMN HEADERS: {}".format(column_headers))
                 else:
                     # Build out database table row records to import 
                     for cell_i, cell in enumerate(row.cells):
@@ -109,7 +113,7 @@ class OutputGenerator:
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))
                 print("STARTED PUT_ITEM")
-                self.ddb_table.put_item(Item=jsonItem)
+                ddb_put_response = self.ddb_table.put_item(Item=jsonItem)
                 print("FINISHED PUT_ITEM")
 
         print("FINISHED TABLE FOR LOOP")

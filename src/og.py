@@ -89,11 +89,12 @@ class OutputGenerator:
 
                 # Initiate the DynamoDB jsonItem
                 jsonItem = {}
+                jsonItem['recordId'] = "{}-{}-{}-{}".format(pk, p, table_i, row_i)
                 jsonItem['documentId'] = pk
                 jsonItem['pageNumber'] = p
                 jsonItem['tableNumber'] = table_i
                 jsonItem['rowNumber'] = row_i
-
+                
 
 
                 if row_i == 1:

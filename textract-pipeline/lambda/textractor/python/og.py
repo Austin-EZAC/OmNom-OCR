@@ -72,7 +72,7 @@ class OutputGenerator:
             print("TABLE: {}".format(table))
             
             # For each table, get the column headers from the first row
-            column_headers = table.rows[0]
+            column_headers = list(table.rows[0])
             print("COLUMN HEADERS: {}".format(column_headers))
 
             # Loop through remaining rows
@@ -87,7 +87,7 @@ class OutputGenerator:
                 jsonItem['rowNumber'] = row_i
 
                 # Build out database table row records to import 
-                for cell_i, cell  in enumerate(row.cells):
+                for cell_i, cell in enumerate(row.cells):
                     column_header = column_headers[cell_i]
                     jsonItem[column_header] = cell.text
                 

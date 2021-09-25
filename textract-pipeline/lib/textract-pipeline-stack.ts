@@ -54,10 +54,11 @@ export class TextractPipelineStack extends cdk.Stack {
       sortKey: { name: 'outputType', type: dynamodb.AttributeType.STRING }
     });
 
-    // //DynamoDB table with Output-Forms field value pair extraction
-    // const outputForms = new dynamodb.Table(this, 'Output-Forms', {
-    //   partitionKey: { name: 'documentId', type: dynamodb.AttributeType.STRING }
-    // });
+    //DynamoDB table with Output-Forms field value pair extraction
+    const outputForms = new dynamodb.Table(this, 'Output-Forms', {
+      partitionKey: { name: 'documentId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'pageNumber', type: dynamodb.AttributeType.NUMBER }
+    });
 
     //DynamoDB table with links to output in S3
     const documentsTable = new dynamodb.Table(this, 'DocumentsTable', {
@@ -289,7 +290,7 @@ export class TextractPipelineStack extends cdk.Stack {
       reservedConcurrentExecutions: 50,
       timeout: cdk.Duration.seconds(900),
       environment: {
-        // OUTPUT_FORMS_TABLE: outputForms.tableName,
+        OUTPUT_FORMS_TABLE: outputForms.tableName,
         OUTPUT_TABLE: outputTable.tableName,
         DOCUMENTS_TABLE: documentsTable.tableName,
         AWS_DATA_PATH : "models"
@@ -303,7 +304,7 @@ export class TextractPipelineStack extends cdk.Stack {
       batchSize: 1
     }));
     //Permissions
-    // outputForms.grantReadWriteData(jobResultProcessor)
+    outputForms.grantReadWriteData(jobResultProcessor)
     outputTable.grantReadWriteData(jobResultProcessor)
     documentsTable.grantReadWriteData(jobResultProcessor)
     contentBucket.grantReadWrite(jobResultProcessor)

@@ -95,7 +95,6 @@ class OutputGenerator:
                 jsonItem['tableNumber'] = table_i
                 jsonItem['rowNumber'] = row_i
 
-
                 if row_i == 0:
                     # Get the column headers from the first row
                     for cell in row.cells:
@@ -103,7 +102,7 @@ class OutputGenerator:
                         print("COLUMN HEADERS: {}".format(column_headers))
                     continue
                 else:
-                    # Build out database table row records to import 
+                    # Build out database table row record for import 
                     for cell_i, cell in enumerate(row.cells):
                         print('cell_i: {}'.format(cell_i))
                         column_header = column_headers[cell_i]
@@ -113,7 +112,7 @@ class OutputGenerator:
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))
                 print("STARTED PUT_ITEM")
-                ddb_put_response = self.ddb_table.put_item(Item=jsonItem)
+                self.ddb_table.put_item(Item=jsonItem)
                 print("FINISHED PUT_ITEM")
 
         print("FINISHED TABLE FOR LOOP")

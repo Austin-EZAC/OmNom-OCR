@@ -112,7 +112,7 @@ class OutputGenerator:
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))
                 print("STARTED PUT_ITEM")
-                ddb_put_response = self.ddb_table.put_item(Item=jsonItem)
+                self.ddb_table.put_item(Item=jsonItem)
                 print("FINISHED PUT_ITEM")
 
         print("FINISHED TABLE FOR LOOP")

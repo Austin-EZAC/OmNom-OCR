@@ -47,7 +47,7 @@ class OutputGenerator:
         print("STARTED FOR LOOP")
         # Export all of the document page's form's fields as key/value pairs
         for field in page.form.fields:
-            if field.key and field.value:
+            if field.key and field.value and field.value.text:
                 jsonItem[field.key.text] = str(field.value.text)
         print("FINISHED FOR LOOP")
 
@@ -98,8 +98,9 @@ class OutputGenerator:
                 if row_i == 0:
                     # Get the column headers from the first row
                     for cell in row.cells:
-                        column_headers.append(cell.text)
-                        print("COLUMN HEADERS: {}".format(column_headers))
+                        if cell.text:
+                            column_headers.append(cell.text)
+                    print("COLUMN HEADERS: {}".format(column_headers))
                     continue
                 else:
                     # Build out database table row record for import 
@@ -107,7 +108,8 @@ class OutputGenerator:
                         print('cell_i: {}'.format(cell_i))
                         column_header = column_headers[cell_i]
                         print('column_header: {}'.format(column_header))
-                        jsonItem[column_header] = cell.text
+                        if cell.text:
+                            jsonItem[column_header] = cell.text
                 
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))

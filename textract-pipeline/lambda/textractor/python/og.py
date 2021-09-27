@@ -72,7 +72,7 @@ class OutputGenerator:
             print("TABLE: {}".format(table))
             print("TABLE ROWS: {}".format(table.rows))
             
-            column_headers = []
+            column_headers = {} # Keys are column indexes and values are column name strings
 
             # For each table, get the column headers from the first row
             # column_headers = list(table.rows[0])
@@ -97,18 +97,18 @@ class OutputGenerator:
 
                 if row_i == 0:
                     # Get the column headers from the first row
-                    for cell in row.cells:
+                    for cell_i, cell in enumerate(row.cells):
                         if cell.text:
-                            column_headers.append(cell.text)
+                            column_headers[cell_i] = cell.text
                     print("COLUMN HEADERS: {}".format(column_headers))
                     continue
                 else:
                     # Build out database table row record for import 
                     for cell_i, cell in enumerate(row.cells):
                         print('cell_i: {}'.format(cell_i))
-                        column_header = column_headers[cell_i]
-                        print('column_header: {}'.format(column_header))
                         if cell.text:
+                            column_header = column_headers[cell_i]
+                            print('column_header: {}'.format(column_header))
                             jsonItem[column_header] = cell.text
                 
                 # Import jsonItem into ddb table

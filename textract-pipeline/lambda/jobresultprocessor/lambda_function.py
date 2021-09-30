@@ -54,6 +54,7 @@ def processRequest(request):
     bucketName = request['bucketName']
     objectName = request['objectName']
     outputTable = request["outputTable"]
+    # outputFormsTable = request["outputFormsTable"]
     documentsTable = request["documentsTable"]
 
     pages = getJobResults(jobAPI, jobId)
@@ -72,7 +73,19 @@ def processRequest(request):
     dynamodb = AwsHelper().getResource('dynamodb')
     ddb = dynamodb.Table(outputTable)
 
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb)
+    # Delete all cap print statements
+    print("STARTING TO RUN DDB_FORM TABLE SEARCH")
+    # print("OUTPUT FORMS TABLE: {}".format(outputFormsTable))
+    ddb_form = dynamodb.Table("Output-Forms")
+    print("ddb_form: {}".format(ddb_form))
+    ddb_table = dynamodb.Table("Output-Tables")
+    print("ddb_table: {}".format(ddb_table))
+    print("FINISHED RUN DDB_FORM TABLE SEARCH")
+
+    print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddb, ddb_form, ddb_table)
+    print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
+
     opg.run()
 
     print("DocumentId: {}".format(jobTag))
@@ -108,6 +121,7 @@ def lambda_handler(event, context):
     request["objectName"] = message['DocumentLocation']['S3ObjectName']
     
     request["outputTable"] = os.environ['OUTPUT_TABLE']
+    # request["outputFormsTable"] = os.environ['OUTPUT_FORMS_TABLE']
     request["documentsTable"] = os.environ['DOCUMENTS_TABLE']
 
     return processRequest(request)

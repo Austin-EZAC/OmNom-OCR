@@ -4,7 +4,7 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form, ddb_table):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -12,6 +12,9 @@ class OutputGenerator:
         self.forms = forms
         self.tables = tables
         self.ddb = ddb
+        self.ddb_form = ddb_form
+        self.ddb_table = ddb_table
+        print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
 
@@ -25,6 +28,97 @@ class OutputGenerator:
         jsonItem['outputPath'] = output
 
         self.ddb.put_item(Item=jsonItem)
+
+    def saveForm(self, pk, page, p):
+        # Where database is saving its form details
+        print("STARTED SAVEFORM FUNCTION")
+        print("DOCUMENT ID: {}".format(pk))
+        
+        # Initiate the DynamoDB jsonItem
+        jsonItem = {}
+        jsonItem['documentId'] = pk
+
+        print("ddb_form - {}".format(self.ddb_form))
+
+        # self.ddb_form.put_item(Item=jsonItem)
+
+        jsonItem['pageNumber'] = p
+
+        print("STARTED FOR LOOP")
+        # Export all of the document page's form's fields as key/value pairs
+        for field in page.form.fields:
+            if field.key and field.value and field.value.text:
+                jsonItem[field.key.text] = str(field.value.text)
+        print("FINISHED FOR LOOP")
+
+        print("jsonItem - {}".format(jsonItem))
+
+        # Put that thing where it belongs
+        print("STARTED PUT_ITEM")
+        
+        self.ddb_form.put_item(Item=jsonItem)
+        print("FINISHED PUT_ITEM")
+
+
+    def saveTable(self, pk, page, p):
+        # Where database is saving its table rows
+        print("STARTED SAVETABLE FUNCTION")
+        print("DOCUMENT ID: {}".format(pk))
+
+        print("STARTED TABLE FOR LOOP")
+
+        # Export all of the document page's table's rows of cells as lists of lists of a list
+        for table_i, table in enumerate(page.tables, 1):
+            print("TABLE: {}".format(table))
+            print("TABLE ROWS: {}".format(table.rows))
+            
+            column_headers = {} # Keys are column indexes and values are column name strings
+
+            # For each table, get the column headers from the first row
+            # column_headers = list(table.rows[0])
+            # print("COLUMN HEADERS: {}".format(column_headers))
+            
+            
+            # rows = list(table.rows)
+            # print(rows)
+            # column_headers = list(rows[0])
+
+            # Loop through remaining rows
+            for row_i, row in enumerate(table.rows):  
+                print("ROW #{}: {}".format(row_i, row))
+
+                # Initiate the DynamoDB jsonItem
+                jsonItem = {}
+                jsonItem['recordId'] = "{}-{}-{}".format(pk, p, table_i)
+                jsonItem['documentId'] = pk
+                jsonItem['pageNumber'] = p
+                jsonItem['tableNumber'] = table_i
+                jsonItem['rowNumber'] = row_i
+
+                if row_i == 0:
+                    # Get the column headers from the first row
+                    for cell_i, cell in enumerate(row.cells):
+                        if cell.text:
+                            column_headers[cell_i] = cell.text
+                    print("COLUMN HEADERS: {}".format(column_headers))
+                    continue
+                else:
+                    # Build out database table row record for import 
+                    for cell_i, cell in enumerate(row.cells):
+                        print('cell_i: {}'.format(cell_i))
+                        if cell.text:
+                            column_header = column_headers[cell_i]
+                            print('column_header: {}'.format(column_header))
+                            jsonItem[column_header] = cell.text
+                
+                # Import jsonItem into ddb table
+                print("jsonItem - {}".format(jsonItem))
+                print("STARTED PUT_ITEM")
+                self.ddb_table.put_item(Item=jsonItem)
+                print("FINISHED PUT_ITEM")
+
+        print("FINISHED TABLE FOR LOOP")
+
 
     def _outputText(self, page, p):
         text = page.text
@@ -94,14 +188,23 @@ class OutputGenerator:
             S3Helper.writeToS3(json.dumps(page.blocks), self.bucketName, opath)
             self.saveItem(self.documentId, "page-{}-Response".format(p), opath)
 
+
             self._outputText(page, p)
 
             docText = docText + page.text + "\n"
 
             if(self.forms):
+                print("STARTED SAVEFORM IN RUN")
+                self.saveForm(self.documentId, page, p)
+                print("FINISHED SAVE FORM IN RUN")
+                
                 self._outputForm(page, p)
 
             if(self.tables):
+                print("STARTED SAVE TABLE IN RUN")
+                self.saveTable(self.documentId, page, p)
+                print("FINISHED SAVE TABLE IN RUN")
+                
                 self._outputTable(page, p)
 
             p = p + 1

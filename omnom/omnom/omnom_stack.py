@@ -5,6 +5,11 @@ import aws_cdk.aws_iam as iam
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_dynamodb as dynamodb
 import aws_cdk.aws_sqs as sqs
+import aws_cdk.aws_lambda as lambda_        #Because lambda is a python-reserved word, we add an underscore for the package alias
+import aws_cdk.aws_events as events
+from aws_cdk.aws_lambda_event_sources import S3EventSource, DynamoEventSource, SqsEventSource, SnsEventSource    # Trigger Lambda Functions these event 
+from aws_cdk.aws_events_targets import LambdaFunction
+
 
 class OmnomStack(cdk.Stack):
 
@@ -99,3 +104,256 @@ class OmnomStack(cdk.Stack):
         jobCompletionTopic.add_subscription(
             sns_subscriptions.SqsSubscription(jobResultsQueue)
         )
+
+
+
+        # **********Lambda Functions******************************
+        # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_lambda/LayerVersion.html
+
+        # Helper Layer with helper functions
+        helperLayer = lambda_.LayerVersion(self, 'HelperLayer', 
+            code = lambda_.Code.from_asset('lambda/helper'),
+            compatible_runtimes = [lambda_.Runtime.PYTHON_3_7],
+            license = 'Apache-2.0',
+            description = 'Helper layer.'
+        )
+
+        # Textractor helper layer
+        textractorLayer = lambda_.LayerVersion(self, 'Textractor', 
+            code = lambda_.Code.from_asset('lambda/textractor'),
+            compatible_runtimes = [lambda_.Runtime.PYTHON_3_7],
+            license = 'Apache-2.0',
+            description = 'Helper layer.'
+        )
+
+        
+        #------------------------------------------------------------
+
+        # S3 Event processor
+        s3Processor = lambda_.Function(self, 'S3Processor', 
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.from_asset('lambda/s3processor'),
+            handler = 'lambda_function.lambda_handler',
+            timeout = cdk.Duration.seconds(30),
+            environment = {
+                'SYNC_QUEUE_URL': syncJobsQueue.queue_url,
+                'ASYNC_QUEUE_URL': asyncJobsQueue.queue_url,
+                'DOCUMENTS_TABLE': documentsTable.table_name,
+                'OUTPUT_TABLE': outputTable.table_name
+            }
+        )
+        # Layer
+        s3Processor.add_layers(helperLayer)
+        # Trigger
+        s3Processor.add_event_source(S3EventSource(contentBucket, 
+            events = [ s3.EventType.OBJECT_CREATED ],
+            filters = [ s3.NotificationKeyFilter(suffix = '.pdf') ]
+        ))
+        s3Processor.add_event_source(S3EventSource(contentBucket, 
+            events = [ s3.EventType.OBJECT_CREATED ],
+            filters = [ s3.NotificationKeyFilter(suffix = '.png') ]
+        ))
+        s3Processor.add_event_source(S3EventSource(contentBucket, 
+            events = [ s3.EventType.OBJECT_CREATED ],
+            filters = [ s3.NotificationKeyFilter(suffix = 'jpg') ]
+        ))
+        s3Processor.add_event_source(S3EventSource(contentBucket, 
+            events = [ s3.EventType.OBJECT_CREATED ],
+            filters = [ s3.NotificationKeyFilter(suffix = '.jpeg') ]
+        ))
+        # Permissions
+        documentsTable.grant_read_write_data(s3Processor)
+        syncJobsQueue.grant_send_messages(s3Processor)
+        asyncJobsQueue.grant_send_messages(s3Processor)
+
+
+        # ------------------------------------------------------------
+
+        # S3 Batch Operations Event processor 
+        s3BatchProcessor = lambda_.Function(self, 'S3BatchProcessor', 
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.from_asset('lambda/s3batchprocessor'),
+            handler = 'lambda_function.lambda_handler',
+            reserved_concurrent_executions = 1,
+            timeout = cdk.Duration.seconds(30),
+            environment = {
+                'DOCUMENTS_TABLE': documentsTable.table_name,
+                'OUTPUT_TABLE': outputTable.table_name
+            }
+        )
+        # Layer
+        s3BatchProcessor.add_layers(helperLayer)
+        # Permissions
+        documentsTable.grant_read_write_data(s3BatchProcessor)
+        s3BatchProcessor.grant_invoke(s3BatchOperationsRole)
+        s3BatchOperationsRole.add_to_policy(
+            iam.PolicyStatement(
+                actions = ["lambda:*"],
+                resources = ["*"]
+            )
+        )
+
+
+        #------------------------------------------------------------
+
+        # Document processor (Router to Sync/Async Pipeline)
+        documentProcessor = lambda_.Function(self, 'TaskProcessor', 
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.from_asset('lambda/documentprocessor'),
+            handler = 'lambda_function.lambda_handler',
+            timeout = cdk.Duration.seconds(900),
+            environment = {
+                'SYNC_QUEUE_URL': syncJobsQueue.queue_url,
+                'ASYNC_QUEUE_URL': asyncJobsQueue.queue_url
+            }
+        )
+        # Layer
+        documentProcessor.add_layers(helperLayer)
+        # Trigger
+        documentProcessor.add_event_source(
+            DynamoEventSource(documentsTable,
+                starting_position = lambda_.StartingPosition.TRIM_HORIZON
+            )
+        )
+        # Permissions
+        documentsTable.grant_read_write_data(documentProcessor)
+        syncJobsQueue.grant_send_messages(documentProcessor)
+        asyncJobsQueue.grant_send_messages(documentProcessor)
+
+
+        #------------------------------------------------------------
+
+        # Sync Jobs Processor (Process jobs using sync APIs)
+        syncProcessor = lambda_.Function(self, 'SyncProcessor', 
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.from_asset('lambda/syncprocessor'),
+            handler = 'lambda_function.lambda_handler',
+            reserved_concurrent_executions = 1,
+            timeout = cdk.Duration.seconds(25),
+            environment = {
+                'OUTPUT_TABLE': outputTable.table_name,
+                'DOCUMENTS_TABLE': documentsTable.table_name,
+                'AWS_DATA_PATH' : 'models'
+            }
+        )
+        # Layer
+        syncProcessor.add_layers(helperLayer)
+        syncProcessor.add_layers(textractorLayer)
+        # Trigger
+        syncProcessor.add_event_source(
+            SqsEventSource(syncJobsQueue, 
+                batch_size = 1
+            )
+        )
+        # Permissions
+        contentBucket.grant_read_write(syncProcessor)
+        existingContentBucket.grant_read_write(syncProcessor)
+        outputTable.grant_read_write_data(syncProcessor)
+        documentsTable.grant_read_write_data(syncProcessor)
+        syncProcessor.add_to_role_policy(
+            iam.PolicyStatement(
+                actions = ["textract:*"],
+                resources = ["*"]
+            )
+        )
+
+
+
+        #------------------------------------------------------------
+
+        # Async Job Processor (Start jobs using Async APIs)
+        asyncProcessor = lambda_.Function(self, 'ASyncProcessor',
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.asset('lambda/asyncprocessor'),
+            handler = 'lambda_function.lambda_handler',
+            reserved_concurrent_executions = 1,
+            timeout = cdk.Duration.seconds(60),
+            environment = {
+                'ASYNC_QUEUE_URL': asyncJobsQueue.queue_url,
+                'SNS_TOPIC_ARN' : jobCompletionTopic.topic_arn,
+                'SNS_ROLE_ARN' : textractServiceRole.role_arn,
+                'AWS_DATA_PATH' : 'models'
+            }
+        )
+        # Layer
+        asyncProcessor.add_layers(helperLayer)
+        # Triggers
+        # Run async job processor every 5 minutes
+        # Enable code below after test deploy
+        rule = events.Rule(self, 'Rule',
+            schedule = events.Schedule.expression('rate(5 minutes)')
+        )
+        rule.add_target(LambdaFunction(asyncProcessor))
+        # Run when a job is successfully complete
+        asyncProcessor.add_event_source(SnsEventSource(jobCompletionTopic))
+        # Permissions
+        contentBucket.grant_read(asyncProcessor)
+        existingContentBucket.grant_read_write(asyncProcessor)
+        asyncJobsQueue.grant_consume_messages(asyncProcessor)
+        asyncProcessor.add_to_role_policy(
+            iam.PolicyStatement(
+                actions = ["iam:PassRole"],
+                resources = [textractServiceRole.role_arn]
+            )
+        )
+        asyncProcessor.add_to_role_policy(
+            iam.PolicyStatement(
+                actions = ["textract:*"],
+                resources = ["*"]
+            )
+        )
+
+
+        # ------------------------------------------------------------
+
+        # Async Jobs Results Processor
+        jobResultProcessor = lambda_.Function(self, 'JobResultProcessor', 
+            runtime = lambda_.Runtime.PYTHON_3_7,
+            code = lambda_.Code.from_asset('lambda/jobresultprocessor'),
+            handler = 'lambda_function.lambda_handler',
+            memory_size = 2000,
+            reserved_concurrent_executions = 50,
+            timeout = cdk.Duration.seconds(900),
+            environment = {
+                'OUTPUT_FORMS_TABLE': outputForms.table_name,
+                'OUTPUT_TABLE': outputTable.table_name,
+                'DOCUMENTS_TABLE': documentsTable.table_name,
+                'AWS_DATA_PATH' : 'models'
+            }
+        );
+        # Layer
+        jobResultProcessor.add_layers(helperLayer)
+        jobResultProcessor.add_layers(textractorLayer)
+        # Triggers
+        jobResultProcessor.add_event_source(
+            SqsEventSource(jobResultsQueue,
+            batch_size = 1
+            )
+        )
+        # Permissions
+        outputForms.grant_read_write_data(jobResultProcessor)
+        outputTable.grant_read_write_data(jobResultProcessor)
+        documentsTable.grant_read_write_data(jobResultProcessor)
+        contentBucket.grant_read_write(jobResultProcessor)
+        existingContentBucket.grant_read_write(jobResultProcessor)
+        jobResultProcessor.add_to_role_policy(
+            iam.PolicyStatement(
+                actions = ["textract:*"],
+                resources = ["*"]
+            )
+        )
+
+        # ------------------------------------------------------------
+
+        # PDF Generator
+        pdfGenerator = lambda_.Function(self, 'PdfGenerator', 
+            runtime = lambda_.Runtime.JAVA_8,
+            code = lambda_.Code.from_asset('lambda/pdfgenerator'),
+            handler = 'DemoLambdaV2::handleRequest',
+            memory_size = 3000,
+            timeout = cdk.Duration.seconds(900),
+        )
+        contentBucket.grant_read_write(pdfGenerator)
+        existingContentBucket.grant_read_write(pdfGenerator)
+        pdfGenerator.grant_invoke(syncProcessor)
+        pdfGenerator.grant_invoke(asyncProcessor)

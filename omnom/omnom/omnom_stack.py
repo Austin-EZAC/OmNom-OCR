@@ -54,6 +54,7 @@ class OmnomStack(cdk.Stack):
             sort_key = dynamodb.Attribute(name = 'outputType', type = dynamodb.AttributeType.STRING)
         )
 
+
         #DynamoDB table with Output-Forms field value pair extraction
         outputForms = dynamodb.Table(self, 'Output-Forms', 
             partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
@@ -67,6 +68,10 @@ class OmnomStack(cdk.Stack):
             stream = dynamodb.StreamViewType.NEW_IMAGE
         )
 
+        # Remove old DynamoDB Tables when App is changed destroyed
+        outputTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+        outputForms.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+        documentsTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
 
 

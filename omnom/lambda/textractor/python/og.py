@@ -4,16 +4,16 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddb, ddb_form, ddb_table):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
         self.objectName = objectName
         self.forms = forms
         self.tables = tables
-        self.ddb = ddb
-        self.ddb_form = ddb_form
-        self.ddb_table = ddb_table
+        self.ddbFiles = ddbFiles
+        self.ddbForms = ddbForms
+        self.ddbTables = ddbTables
         print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
@@ -27,7 +27,7 @@ class OutputGenerator:
         jsonItem['outputType'] = sk
         jsonItem['outputPath'] = output
 
-        self.ddb.put_item(Item=jsonItem)
+        self.ddbFiles.put_item(Item=jsonItem)
 
     def saveForm(self, pk, page, p):
         # Where database is saving its form details
@@ -38,9 +38,9 @@ class OutputGenerator:
         jsonItem = {}
         jsonItem['documentId'] = pk
 
-        print("ddb_form - {}".format(self.ddb_form))
+        print("ddbForms - {}".format(self.ddbForms))
 
-        # self.ddb_form.put_item(Item=jsonItem)
+        # self.ddbForms.put_item(Item=jsonItem)
 
         jsonItem['pageNumber'] = p
 
@@ -56,7 +56,7 @@ class OutputGenerator:
         # Put that thing where it belongs
         print("STARTED PUT_ITEM")
         
-        self.ddb_form.put_item(Item=jsonItem)
+        self.ddbForms.put_item(Item=jsonItem)
         print("FINISHED PUT_ITEM")
 
 
@@ -114,7 +114,7 @@ class OutputGenerator:
                 # Import jsonItem into ddb table
                 print("jsonItem - {}".format(jsonItem))
                 print("STARTED PUT_ITEM")
-                self.ddb_table.put_item(Item=jsonItem)
+                self.ddbTables.put_item(Item=jsonItem)
                 print("FINISHED PUT_ITEM")
 
         print("FINISHED TABLE FOR LOOP")

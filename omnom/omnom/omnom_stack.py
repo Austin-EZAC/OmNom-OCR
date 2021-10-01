@@ -49,18 +49,22 @@ class OmnomStack(cdk.Stack):
         # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_dynamodb/Table.html
 
         # DynamoDB table with links to output in S3
-        outputTable = dynamodb.Table(self, 'OutputTable', 
+        outputFiles = dynamodb.Table(self, 'Output-Files', 
             partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
             sort_key = dynamodb.Attribute(name = 'outputType', type = dynamodb.AttributeType.STRING)
         )
 
-
         #DynamoDB table with Output-Forms field value pair extraction
         outputForms = dynamodb.Table(self, 'Output-Forms', 
             partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
-            sort_key = dynamodb.Attribute(name = 'pageNumber', type = dynamodb.AttributeType.STRING)
+            sort_key = dynamodb.Attribute(name = 'pageNumber', type = dynamodb.AttributeType.NUMBER)
         )
 
+        #DynamoDB table with Output-Forms field value pair extraction
+        outputTables = dynamodb.Table(self, 'Output-Tables', 
+            partition_key = dynamodb.Attribute(name = 'recordId', type = dynamodb.AttributeType.STRING),
+            sort_key = dynamodb.Attribute(name = 'rowNumber', type = dynamodb.AttributeType.NUMBER)
+        )
 
         #DynamoDB table with links to output in S3
         documentsTable = dynamodb.Table(self, 'DocumentsTable', 
@@ -68,9 +72,10 @@ class OmnomStack(cdk.Stack):
             stream = dynamodb.StreamViewType.NEW_IMAGE
         )
 
-        # Remove old DynamoDB Tables when App is changed destroyed
-        outputTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+        # Remove old DynamoDB tables when app is destroyed
+        outputFiles.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         outputForms.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+        outputTables.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         documentsTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
 
@@ -144,7 +149,7 @@ class OmnomStack(cdk.Stack):
                 'SYNC_QUEUE_URL': syncJobsQueue.queue_url,
                 'ASYNC_QUEUE_URL': asyncJobsQueue.queue_url,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
-                'OUTPUT_TABLE': outputTable.table_name
+                'OUTPUT_TABLE': outputFiles.table_name
             }
         )
         # Layer
@@ -183,7 +188,7 @@ class OmnomStack(cdk.Stack):
             timeout = cdk.Duration.seconds(30),
             environment = {
                 'DOCUMENTS_TABLE': documentsTable.table_name,
-                'OUTPUT_TABLE': outputTable.table_name
+                'OUTPUT_TABLE': outputFiles.table_name
             }
         )
         # Layer
@@ -236,7 +241,7 @@ class OmnomStack(cdk.Stack):
             reserved_concurrent_executions = 1,
             timeout = cdk.Duration.seconds(25),
             environment = {
-                'OUTPUT_TABLE': outputTable.table_name,
+                'OUTPUT_TABLE': outputFiles.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
                 'AWS_DATA_PATH' : 'models'
             }
@@ -253,7 +258,7 @@ class OmnomStack(cdk.Stack):
         # Permissions
         contentBucket.grant_read_write(syncProcessor)
         existingContentBucket.grant_read_write(syncProcessor)
-        outputTable.grant_read_write_data(syncProcessor)
+        outputFiles.grant_read_write_data(syncProcessor)
         documentsTable.grant_read_write_data(syncProcessor)
         syncProcessor.add_to_role_policy(
             iam.PolicyStatement(
@@ -320,8 +325,9 @@ class OmnomStack(cdk.Stack):
             reserved_concurrent_executions = 50,
             timeout = cdk.Duration.seconds(900),
             environment = {
-                'OUTPUT_FORMS_TABLE': outputForms.table_name,
-                'OUTPUT_TABLE': outputTable.table_name,
+                'OUTPUT_FILES': outputFiles.table_name,
+                'OUTPUT_FORMS': outputForms.table_name,
+                'OUTPUT_TABLES': outputTables.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
                 'AWS_DATA_PATH' : 'models'
             }
@@ -336,8 +342,9 @@ class OmnomStack(cdk.Stack):
             )
         )
         # Permissions
+        outputFiles.grant_read_write_data(jobResultProcessor)
         outputForms.grant_read_write_data(jobResultProcessor)
-        outputTable.grant_read_write_data(jobResultProcessor)
+        outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)

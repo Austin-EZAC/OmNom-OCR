@@ -2,6 +2,7 @@ import aws_cdk.core as cdk
 import aws_cdk.aws_sns as sns
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_s3 as s3
+import aws_cdk.aws_dynamodb as dynamodb
 
 class OmnomStack(cdk.Stack):
 
@@ -10,18 +11,18 @@ class OmnomStack(cdk.Stack):
 
         # The code that defines your stack goes here
 
-        #**********SNS Topics**********
+        # **********SNS Topics**********
         jobCompletionTopic = sns.Topic(self, 'Omnom-JobCompletion')
 
 
-        #**********IAM Roles******************************
+        # **********IAM Roles******************************
         textractServiceRole = iam.Role(self, 'OmnomServiceRole', assumed_by=iam.ServicePrincipal('textract.amazonaws.com'))
         textractServiceRole.add_to_policy(iam.PolicyStatement(
             effect = iam.Effect.ALLOW,
             resources = [jobCompletionTopic.topic_arn],
             actions = ["sns:Publish"]))
 
-        #**********S3 Batch Operations Role******************************
+        # **********S3 Batch Operations Role******************************
         s3BatchOperationsRole = iam.Role(self, 'S3BatchOperationsRole', assumed_by=iam.ServicePrincipal('batchoperations.s3.amazonaws.com'))
 
 
@@ -35,7 +36,26 @@ class OmnomStack(cdk.Stack):
         inventoryAndLogsBucket = s3.Bucket(self, 'InventoryAndLogsBucket', versioned= False, auto_delete_objects = True, removal_policy = cdk.RemovalPolicy.DESTROY)
         inventoryAndLogsBucket.grant_read_write(s3BatchOperationsRole)
 
-        
 
-        
 
+        # **********DynamoDB Table*************************
+        # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_dynamodb/Table.html
+
+        # DynamoDB table with links to output in S3
+        outputTable = dynamodb.Table(self, 'OutputTable', 
+            partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
+            sort_key = dynamodb.Attribute(name = 'outputType', type = dynamodb.AttributeType.STRING)
+        )
+
+        #DynamoDB table with Output-Forms field value pair extraction
+        outputForms = dynamodb.Table(self, 'Output-Forms', 
+            partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
+            sort_key = dynamodb.Attribute(name = 'pageNumber', type = dynamodb.AttributeType.STRING)
+        )
+
+
+        #DynamoDB table with links to output in S3
+        documentsTable = dynamodb.Table(self, 'DocumentsTable', 
+            partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
+            stream = dynamodb.StreamViewType.NEW_IMAGE
+        )

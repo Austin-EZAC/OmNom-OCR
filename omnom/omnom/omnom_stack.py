@@ -1,8 +1,10 @@
 import aws_cdk.core as cdk
 import aws_cdk.aws_sns as sns
+import aws_cdk.aws_sns_subscriptions as sns_subscriptions
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_dynamodb as dynamodb
+import aws_cdk.aws_sqs as sqs
 
 class OmnomStack(cdk.Stack):
 
@@ -58,4 +60,42 @@ class OmnomStack(cdk.Stack):
         documentsTable = dynamodb.Table(self, 'DocumentsTable', 
             partition_key = dynamodb.Attribute(name = 'documentId', type = dynamodb.AttributeType.STRING),
             stream = dynamodb.StreamViewType.NEW_IMAGE
+        )
+
+
+
+
+        # **********SQS Queues*****************************
+        # https://docs.aws.amazon.com/cdk/api/latest/python/aws_cdk.aws_sqs/Queue.html
+
+        # Dead Letter Queue (DLQ)
+        dlq = sqs.Queue(self, 'DeadLetterQueue',
+            visibility_timeout = cdk.Duration.seconds(30), 
+            retention_period = cdk.Duration.seconds(1209600)
+        )
+
+        # Input Queue for sync jobs
+        syncJobsQueue = sqs.Queue(self, 'SyncJobs', 
+            visibility_timeout = cdk.Duration.seconds(30), 
+            retention_period = cdk.Duration.seconds(1209600), 
+            dead_letter_queue = sqs.DeadLetterQueue(queue = dlq, max_receive_count = 50)
+        )
+
+        # Input Queue for async jobs
+        asyncJobsQueue = sqs.Queue(self, 'AsyncJobs',
+            visibility_timeout = cdk.Duration.seconds(30), 
+            retention_period = cdk.Duration.seconds(1209600), 
+            dead_letter_queue = sqs.DeadLetterQueue(queue = dlq, max_receive_count = 50)
+        )
+
+        # Job Results Queue
+        jobResultsQueue = sqs.Queue(self, 'JobResults',
+            visibility_timeout = cdk.Duration.seconds(900), 
+            retention_period = cdk.Duration.seconds(1209600), 
+            dead_letter_queue = sqs.DeadLetterQueue(queue = dlq, max_receive_count = 50)
+        )
+
+        # Job Completion Trigger
+        jobCompletionTopic.add_subscription(
+            sns_subscriptions.SqsSubscription(jobResultsQueue)
         )

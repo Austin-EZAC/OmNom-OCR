@@ -9,4 +9,13 @@ node_modules
 .cdk.staging
 cdk.out
 
-/env
+
+*.swp
+package-lock.json
+__pycache__
+.pytest_cache
+env
+.env
+.venv
+.vscode
+*.egg-info

@@ -12,15 +12,15 @@ import datastore
 
 # Update variables below according to your infrastructure
 # You only need this if you want to test lambda code locally
-syncQueueUrl = "https://sqs.us-east-1.amazonaws.com/xxxxxxxxxx/TextractPipeline-SyncJobs0FE0C444-BBR6E631F0I6"
-asyncQueueUrl = "https://sqs.us-east-1.amazonaws.com/xxxxxxxxxx/TextractPipeline-AsyncJobsE9347181-1SV1MLXM1UILD"
-bucketName = "textractpipeline-documentsbucket9ec9deb9-ofohi06s79gi"
+syncQueueUrl = "https://sqs.us-east-2.amazonaws.com/929835491811/OmnomStack-SyncJobs0FE0C444-83PKXDIXAVWC"
+asyncQueueUrl = "https://sqs.us-east-2.amazonaws.com/929835491811/OmnomStack-AsyncJobsE9347181-642VRQ5FQV7H"
+bucketName = "omnomstack-documentsbucket9ec9deb9-jqz6fjwc1vrk"
 
-documentsTableName = "TextractPipeline-DocumentsTable7E808EE5-8IXG1Z8GJDHB"
-outputTableName = "TextractPipeline-OutputTable875D8E18-13GV0UL4BOW6R"
+documentsTableName = "OmnomStack-DocumentsTable7E808EE5-DJRGTG03Y6SX"
+outputTableName = "OmnomStack-OutputForms2663C270-WDRUEQ36JC4G"
 
-snsTopic = "arn:aws:sns:us-east-1:xxxxxxxxxx:TextractPipeline-JobCompletionF65D4017-ASSENX3JLRKZ"
-snsRole = "arn:aws:iam::xxxxxxxxxx:role/TextractPipeline-TextractServiceRole720C3B18-BS7XGG84Z4WH"
+snsTopic = "arn:aws:sns:us-east-2:929835491811:OmnomStack-OmnomJobCompletion0BCED563-1ARMR5LFTDLWJ"
+snsRole = "arn:aws:iam::929835491811:role/OmnomStack-OmnomServiceRoleAD67DD40-161K2D092XW1C"
 
 s3Image = "employmentapp.png"
 s3Pdf = "pdfdoc.pdf"
@@ -139,7 +139,7 @@ def dataStore_getDocuments():
 #processSyncJob("822927b4-7798-11e9-8495-4a0007597ab0")
 
 #Async Pipeline
-#createPdfDocument(1)
-#processPdfDocument()
-#processAsyncJobs()
-#processJobResults()
+createPdfDocument(1)
+processPdfDocument()
+processAsyncJobs()
+processJobResults()

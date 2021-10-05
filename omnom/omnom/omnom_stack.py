@@ -1,9 +1,11 @@
 import aws_cdk.core as cdk
+import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_sns as sns
 import aws_cdk.aws_sns_subscriptions as sns_subscriptions
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_dynamodb as dynamodb
+import aws_cdk.aws_rds as rds
 import aws_cdk.aws_sqs as sqs
 import aws_cdk.aws_lambda as lambda_        #Because lambda is a python-reserved word, we add an underscore for the package alias
 import aws_cdk.aws_events as events
@@ -28,6 +30,10 @@ class OmnomStack(cdk.Stack):
             effect = iam.Effect.ALLOW,
             resources = [jobCompletionTopic.topic_arn],
             actions = ["sns:Publish"]))
+
+        # **********VPC******************************
+        vpc = ec2.Vpc(self, "VPC")
+
 
         # **********S3 Batch Operations Role******************************
         s3BatchOperationsRole = iam.Role(self, 'S3BatchOperationsRole', assumed_by=iam.ServicePrincipal('batchoperations.s3.amazonaws.com'))
@@ -77,6 +83,27 @@ class OmnomStack(cdk.Stack):
         outputForms.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         outputTables.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         documentsTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+
+
+        
+        # **********RDS Databases******************************
+        rds_db = rds.DatabaseInstance(self, "OmnomDB",
+            database_name="GarbageHeap",
+            engine=rds.DatabaseInstanceEngine.mysql(
+                version=rds.MysqlEngineVersion.VER_8_0_16
+            ),
+            vpc=vpc,
+            port=3306,
+            instance_type= ec2.InstanceType.of(
+                ec2.InstanceClass.MEMORY4,
+                ec2.InstanceSize.LARGE,
+            ),
+            removal_policy=cdk.RemovalPolicy.DESTROY,
+            deletion_protection=False
+        )
+
+
+
 
 
 
@@ -346,6 +373,7 @@ class OmnomStack(cdk.Stack):
         outputForms.grant_read_write_data(jobResultProcessor)
         outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
+        rds_db.grant_connect(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)
         jobResultProcessor.add_to_role_policy(
@@ -369,3 +397,6 @@ class OmnomStack(cdk.Stack):
         existingContentBucket.grant_read_write(pdfGenerator)
         pdfGenerator.grant_invoke(syncProcessor)
         pdfGenerator.grant_invoke(asyncProcessor)
+
+
+        

@@ -4,7 +4,7 @@ from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables, dbConn):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -14,6 +14,7 @@ class OutputGenerator:
         self.ddbFiles = ddbFiles
         self.ddbForms = ddbForms
         self.ddbTables = ddbTables
+        self.dbConn = dbConn
         print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)

@@ -356,7 +356,8 @@ class OmnomStack(cdk.Stack):
                 'OUTPUT_FORMS': outputForms.table_name,
                 'OUTPUT_TABLES': outputTables.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
-                'AWS_DATA_PATH' : 'models'
+                'AWS_DATA_PATH' : 'models',
+                'DB_SECRET_ARN': rds_db.secret.secret_arn
             }
         );
         # Layer
@@ -374,6 +375,7 @@ class OmnomStack(cdk.Stack):
         outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
         rds_db.grant_connect(jobResultProcessor)
+        rds_db.secret.grant_read(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)
         jobResultProcessor.add_to_role_policy(

@@ -2,6 +2,7 @@ import json
 import os
 import boto3
 import time
+import pymysql
 from helper import AwsHelper
 from og import OutputGenerator
 import datastore
@@ -57,13 +58,11 @@ def processRequest(request):
     outputForms = request["outputForms"]
     outputTables = request["outputTables"]
     documentsTable = request["documentsTable"]
+    dbSecretArn = request["dbSecretArn"]
 
     pages = getJobResults(jobAPI, jobId)
 
     print("Result pages recieved: {}".format(len(pages)))
-
-    #dynamodb = AwsHelper().getResource("dynamodb")
-    #ddb = dynamodb.Table(outputFiles)
 
     detectForms = False
     detectTables = False
@@ -84,8 +83,23 @@ def processRequest(request):
     print("ddbTables: {}".format(ddbTables))
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
+    # Connect to RDS Database
+    secretsClient = boto3.client('secretsmanager')
+    dbSecret =  secretsClient.get_secret_value(SecretId=dbSecretArn)
+    dbSecretDict = json.loads(dbSecret['SecretString'])
+    print('dbSecretDict: {}'.format(dbSecretDict))
+    dbConn = pymysql.connect(host=dbSecretDict['host'],
+                             port=dbSecretDict['port'],
+                             database=dbSecretDict['dbname'],
+                             user=dbSecretDict['username'],
+                             password=dbSecretDict['password'],
+                             cursorclass=pymysql.cursors.DictCursor)
+
+    print('dbConn Type: '.format(type(dbConn)))
+
+
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables)
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables, dbConn)
     print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
 
     opg.run()
@@ -126,6 +140,7 @@ def lambda_handler(event, context):
     request["outputForms"] = os.environ['OUTPUT_FORMS']
     request["outputTables"] = os.environ['OUTPUT_TABLES']
     request["documentsTable"] = os.environ['DOCUMENTS_TABLE']
+    request["dbSecretArn"] = os.environ['DB_SECRET_ARN']
 
     return processRequest(request)
 

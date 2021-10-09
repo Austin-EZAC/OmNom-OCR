@@ -25,14 +25,21 @@ class OmnomStack(cdk.Stack):
 
 
         # **********IAM Roles******************************
-        textractServiceRole = iam.Role(self, 'OmnomServiceRole', assumed_by=iam.ServicePrincipal('textract.amazonaws.com'))
+        textractServiceRole = iam.Role(self, 'TextractServiceRole', assumed_by=iam.ServicePrincipal('textract.amazonaws.com'))
         textractServiceRole.add_to_policy(iam.PolicyStatement(
             effect = iam.Effect.ALLOW,
             resources = [jobCompletionTopic.topic_arn],
             actions = ["sns:Publish"]))
 
+
+        jobResultsRole = iam.Role(self, 'JobResultsRole', assumed_by=iam.ServicePrincipal('lambda.amazonaws.com'))
+        jobResultsRole.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"))
+        jobResultsRole.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"))
+
+
         # **********VPC******************************
         vpc = ec2.Vpc(self, "VPC")
+        vpc.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
 
         # **********S3 Batch Operations Role******************************
@@ -351,6 +358,8 @@ class OmnomStack(cdk.Stack):
             memory_size = 2000,
             reserved_concurrent_executions = 50,
             timeout = cdk.Duration.seconds(900),
+            role = jobResultsRole,
+            vpc = vpc,
             environment = {
                 'OUTPUT_FILES': outputFiles.table_name,
                 'OUTPUT_FORMS': outputForms.table_name,

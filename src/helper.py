@@ -250,12 +250,13 @@ class MySQLHelper:
 
         # Connect to RDS Database
         dbSecretDict = SecretsHelper.getSecretDict(dbSecretArn)
+        print(dbSecretDict)
         dbConn = pymysql.connect(host=dbSecretDict['host'],
                                 port=dbSecretDict['port'],
                                 database=dbSecretDict['dbname'],
                                 user=dbSecretDict['username'],
                                 password=dbSecretDict['password'],
-                                cursorclass=pymysql.cursors.DictCursor)
+                                connect_timeout=5)
 
         return dbConn
 

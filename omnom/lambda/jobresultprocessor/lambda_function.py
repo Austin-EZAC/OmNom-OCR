@@ -2,8 +2,7 @@ import json
 import os
 import boto3
 import time
-import pymysql
-from helper import AwsHelper
+from helper import AwsHelper, MySQLHelper
 from og import OutputGenerator
 import datastore
 
@@ -83,20 +82,8 @@ def processRequest(request):
     print("ddbTables: {}".format(ddbTables))
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
-    # Connect to RDS Database
-    secretsClient = boto3.client('secretsmanager')
-    dbSecret =  secretsClient.get_secret_value(SecretId=dbSecretArn)
-    dbSecretDict = json.loads(dbSecret['SecretString'])
-    print('dbSecretDict: {}'.format(dbSecretDict))
-    dbConn = pymysql.connect(host=dbSecretDict['host'],
-                             port=dbSecretDict['port'],
-                             database=dbSecretDict['dbname'],
-                             user=dbSecretDict['username'],
-                             password=dbSecretDict['password'],
-                             cursorclass=pymysql.cursors.DictCursor)
-
+    dbConn = MySQLHelper.getConn(dbSecretArn)
     print('dbConn Type: '.format(type(dbConn)))
-
 
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
     opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables, dbConn)

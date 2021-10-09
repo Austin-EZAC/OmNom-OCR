@@ -3,6 +3,8 @@ from botocore.client import Config
 import os
 import csv
 import io
+import json
+import pymysql
 from boto3.dynamodb.conditions import Key
 
 class DynamoDBHelper:
@@ -226,3 +228,35 @@ class FileHelper:
             writer = csv.writer(csv_file)
             for item in csvData:
                 writer.writerow(item)
+
+
+class SecretsHelper:
+
+    @staticmethod
+    def getSecretDict(secretArn):
+        secretDict = None
+
+        secretsClient = boto3.client('secretsmanager')
+        secret =  secretsClient.get_secret_value(SecretId=secretArn)
+        secretDict = json.loads(secret['SecretString'])
+
+        return secretDict
+
+class MySQLHelper:
+
+    @staticmethod
+    def getConn(dbSecretArn):
+        dbConn = None
+
+        # Connect to RDS Database
+        dbSecretDict = SecretsHelper.getSecretDict(dbSecretArn)
+        dbConn = pymysql.connect(host=dbSecretDict['host'],
+                                port=dbSecretDict['port'],
+                                database=dbSecretDict['dbname'],
+                                user=dbSecretDict['username'],
+                                password=dbSecretDict['password'],
+                                cursorclass=pymysql.cursors.DictCursor)
+
+        return dbConn
+
+   

@@ -58,6 +58,7 @@ def processRequest(request):
     outputTables = request["outputTables"]
     documentsTable = request["documentsTable"]
     dbSecretArn = request["dbSecretArn"]
+    dbProxyEndpoint = request["dbProxyEndpoint"]
 
     pages = getJobResults(jobAPI, jobId)
 
@@ -82,7 +83,7 @@ def processRequest(request):
     print("ddbTables: {}".format(ddbTables))
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
-    dbConn = MySQLHelper.getConn(dbSecretArn)
+    dbConn = MySQLHelper.getConn(dbSecretArn, dbProxyEndpoint)
     print('dbConn Type: '.format(type(dbConn)))
 
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
@@ -128,6 +129,7 @@ def lambda_handler(event, context):
     request["outputTables"] = os.environ['OUTPUT_TABLES']
     request["documentsTable"] = os.environ['DOCUMENTS_TABLE']
     request["dbSecretArn"] = os.environ['DB_SECRET_ARN']
+    request["dbProxyEndpoint"] = os.environ['DB_PROXY_ENDPOINT']
 
     return processRequest(request)
 

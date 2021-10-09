@@ -245,14 +245,14 @@ class SecretsHelper:
 class MySQLHelper:
 
     @staticmethod
-    def getConn(dbSecretArn):
+    def getConn(dbSecretArn, dbProxyEndpoint):
         dbConn = None
 
         # Connect to RDS Database
         dbSecretDict = SecretsHelper.getSecretDict(dbSecretArn)
         print(dbSecretDict)
-        dbConn = pymysql.connect(host=dbSecretDict['host'],
-                                port=dbSecretDict['port'],
+        dbConn = pymysql.connect(host=dbProxyEndpoint,
+                                port=3306,
                                 database=dbSecretDict['dbname'],
                                 user=dbSecretDict['username'],
                                 password=dbSecretDict['password'],

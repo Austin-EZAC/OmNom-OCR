@@ -9,6 +9,8 @@ import aws_cdk.aws_rds as rds
 import aws_cdk.aws_sqs as sqs
 import aws_cdk.aws_lambda as lambda_        #Because lambda is a python-reserved word, we add an underscore for the package alias
 import aws_cdk.aws_events as events
+import aws_cdk.aws_ssm as ssm
+import aws_cdk.aws_secretsmanager as secrets
 from aws_cdk.aws_lambda_event_sources import S3EventSource, DynamoEventSource, SqsEventSource, SnsEventSource    # Trigger Lambda Functions these event 
 from aws_cdk.aws_events_targets import LambdaFunction
 
@@ -32,14 +34,23 @@ class OmnomStack(cdk.Stack):
             actions = ["sns:Publish"]))
 
 
-        jobResultsRole = iam.Role(self, 'JobResultsRole', assumed_by=iam.ServicePrincipal('lambda.amazonaws.com'))
-        jobResultsRole.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaVPCAccessExecutionRole"))
-        jobResultsRole.add_managed_policy(iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"))
 
 
         # **********VPC******************************
         vpc = ec2.Vpc(self, "VPC")
         vpc.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+
+
+        # **********SECURITY GROUPS**********
+
+        # We need this security group to add an ingress rule and allow our lambda to query the proxy
+        lambda_to_proxy_group = ec2.SecurityGroup(self, 'Lambda to RDS Proxy Connection', vpc=vpc)
+
+        # We need this security group to allow our proxy to query our MySQL Instance
+        db_connection_group = ec2.SecurityGroup(self, 'Proxy to DB Connection', vpc=vpc)
+        db_connection_group.add_ingress_rule(db_connection_group,ec2.Port.tcp(3306), 'allow db connection')
+        db_connection_group.add_ingress_rule(lambda_to_proxy_group, ec2.Port.tcp(3306), 'allow lambda connection')
+
 
 
         # **********S3 Batch Operations Role******************************
@@ -94,22 +105,49 @@ class OmnomStack(cdk.Stack):
 
         
         # **********RDS Databases******************************
-        rds_db = rds.DatabaseInstance(self, "OmnomDB",
+
+        # Generate Database Secret
+        """db_credentials_secret = secrets.Secret(self, 'DBCredentialsSecret',
+                                               generate_secret_string=secrets.SecretStringGenerator(
+                                                   secret_string_template="{\"username\":\"syscdk\"}",
+                                                   exclude_punctuation=True,
+                                                   include_space=False,
+                                                   generate_string_key="password"
+                                               ))
+
+        ssm.StringParameter(self, 'DBCredentialsArn',
+                            parameter_name='rds-credentials-arn',
+                            string_value=db_credentials_secret.secret_arn)"""
+
+        rds_instance = rds.DatabaseInstance(self, "OmnomDB",
             database_name="GarbageHeap",
             engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_8_0_16
+                version=rds.MysqlEngineVersion.VER_5_7_34
             ),
             vpc=vpc,
-            port=3306,
+            #credentials=rds.Credentials.from_secret(db_credentials_secret),
             instance_type= ec2.InstanceType.of(
                 ec2.InstanceClass.MEMORY4,
                 ec2.InstanceSize.LARGE,
             ),
             removal_policy=cdk.RemovalPolicy.DESTROY,
-            deletion_protection=False
+            deletion_protection=False,
+            security_groups=[db_connection_group]
         )
 
 
+
+        # Create an RDS proxy
+        proxy = rds_instance.add_proxy('rdsProxy',
+                                       secrets=[rds_instance.secret],
+                                       debug_logging=True,
+                                       vpc=vpc,
+                                       vpc_subnets=ec2.SubnetSelection( subnet_type= ec2.SubnetType.PRIVATE),
+                                       security_groups=[db_connection_group])
+
+        # Workaround for bug where TargetGroupName is not set but required
+        target_group = proxy.node.find_child('ProxyTargetGroup')
+        target_group.add_property_override('TargetGroupName', 'default')
 
 
 
@@ -358,15 +396,16 @@ class OmnomStack(cdk.Stack):
             memory_size = 2000,
             reserved_concurrent_executions = 50,
             timeout = cdk.Duration.seconds(900),
-            role = jobResultsRole,
             vpc = vpc,
+            vpc_subnets = ec2.SubnetSelection( subnet_type= ec2.SubnetType.PRIVATE),
             environment = {
                 'OUTPUT_FILES': outputFiles.table_name,
                 'OUTPUT_FORMS': outputForms.table_name,
                 'OUTPUT_TABLES': outputTables.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
                 'AWS_DATA_PATH' : 'models',
-                'DB_SECRET_ARN': rds_db.secret.secret_arn
+                "DB_PROXY_ENDPOINT": proxy.endpoint,
+                "DB_SECRET_ARN": rds_instance.secret.secret_arn
             }
         );
         # Layer
@@ -375,7 +414,8 @@ class OmnomStack(cdk.Stack):
         # Triggers
         jobResultProcessor.add_event_source(
             SqsEventSource(jobResultsQueue,
-            batch_size = 1
+            batch_size = 1,
+            max_batching_window = cdk.Duration.seconds(120)
             )
         )
         # Permissions
@@ -383,8 +423,7 @@ class OmnomStack(cdk.Stack):
         outputForms.grant_read_write_data(jobResultProcessor)
         outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
-        rds_db.grant_connect(jobResultProcessor)
-        rds_db.secret.grant_read(jobResultProcessor)
+        rds_instance.secret.grant_read(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)
         jobResultProcessor.add_to_role_policy(

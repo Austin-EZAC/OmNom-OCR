@@ -1,10 +1,10 @@
 import json
-from helper import FileHelper, S3Helper
+from helper import FileHelper, S3Helper, AuroraHelper
 from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables, dbConn):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables, dbCluserArn, dbSecretArn):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -14,7 +14,8 @@ class OutputGenerator:
         self.ddbFiles = ddbFiles
         self.ddbForms = ddbForms
         self.ddbTables = ddbTables
-        self.dbConn = dbConn
+        self.dbCluserArn = dbCluserArn
+        self.dbSecretArn = dbSecretArn
         print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
@@ -120,6 +121,79 @@ class OutputGenerator:
 
         print("FINISHED TABLE FOR LOOP")
 
+    def sqlTest(self):
+
+        dbCluserArn = self.dbCluserArn
+        dbSecretArn = self.dbSecretArn
+
+        print('dbCluserArn: {}'.format(dbCluserArn))
+        print('dbSecretArn: {}'.format(dbSecretArn))
+
+        testDb = 'test_db'
+        testTable = 'test_table'
+        rdsData = boto3.client('rds-data')
+        AuroraHelper.wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10)
+
+        sql = """
+        CREATE DATABASE IF NOT EXISTS {};
+        """.format(testDb)
+
+        setupResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn,  
+            sql = sql,
+            continueAfterTimeout = True)
+        print(str(setupResponse))
+
+        sql = """
+        CREATE TABLE IF NOT EXISTS {} (number INT);
+        """.format(testTable)
+
+        setupResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn,  
+            database = testDb, 
+            sql = sql,
+            continueAfterTimeout = True)
+        print(str(setupResponse))
+
+
+
+        sql = """
+        INSERT INTO {} (number) VALUES(:number)       
+        """.format(testTable)
+
+        param_set = []
+        param_set.append( {
+            'name': 'number',
+            'value': {'doubleValue': 1}
+            } )
+        
+        insertResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn, 
+            database = testDb, 
+            sql = sql,
+            parameters = param_set)
+
+        print('SQL INSERT COMPLETE')
+        print(str(insertResponse))
+
+
+
+        sql = """select * from {}""".format(testTable)
+
+        queryResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn, 
+            database = testDb, 
+            sql = sql)
+        queryrecords = queryResponse['records']
+
+        print("Query Response: {}".format(queryResponse))
+        print("Query Records: {}".format(queryrecords))
+
+
 
     def _outputText(self, page, p):
         text = page.text
@@ -170,6 +244,8 @@ class OutputGenerator:
         self.saveItem(self.documentId, "page-{}-Tables".format(p), opath)
 
     def run(self):
+
+        self.sqlTest()
 
         if(not self.document.pages):
             return

@@ -40,18 +40,6 @@ class OmnomStack(cdk.Stack):
         vpc = ec2.Vpc(self, "VPC")
 
 
-        # **********SECURITY GROUPS**********
-
-        # We need this security group to add an ingress rule and allow our lambda to query the proxy
-        lambda_to_proxy_group = ec2.SecurityGroup(self, 'Lambda to RDS Proxy Connection', vpc=vpc)
-
-        # We need this security group to allow our proxy to query our MySQL Instance
-        db_connection_group = ec2.SecurityGroup(self, 'Proxy to DB Connection', vpc=vpc)
-        db_connection_group.add_ingress_rule(db_connection_group,ec2.Port.tcp(3306), 'allow db connection')
-        db_connection_group.add_ingress_rule(lambda_to_proxy_group, ec2.Port.tcp(3306), 'allow lambda connection')
-
-
-
         # **********S3 Batch Operations Role******************************
         s3BatchOperationsRole = iam.Role(self, 'S3BatchOperationsRole', assumed_by=iam.ServicePrincipal('batchoperations.s3.amazonaws.com'))
 
@@ -104,50 +92,12 @@ class OmnomStack(cdk.Stack):
 
         
         # **********RDS Databases******************************
-
-        # Generate Database Secret
-        """db_credentials_secret = secrets.Secret(self, 'DBCredentialsSecret',
-                                               generate_secret_string=secrets.SecretStringGenerator(
-                                                   secret_string_template="{\"username\":\"syscdk\"}",
-                                                   exclude_punctuation=True,
-                                                   include_space=False,
-                                                   generate_string_key="password"
-                                               ))
-
-        ssm.StringParameter(self, 'DBCredentialsArn',
-                            parameter_name='rds-credentials-arn',
-                            string_value=db_credentials_secret.secret_arn)"""
-
-        rds_instance = rds.DatabaseInstance(self, "OmnomDB",
-            database_name="GarbageHeap",
-            engine=rds.DatabaseInstanceEngine.mysql(
-                version=rds.MysqlEngineVersion.VER_5_7_34
-            ),
+        # Aurora Serverless database cluster
+        rdsCluster = rds.ServerlessCluster(self, "OmnomCluster",
+            engine=rds.DatabaseClusterEngine.AURORA_MYSQL,
             vpc=vpc,
-            #credentials=rds.Credentials.from_secret(db_credentials_secret),
-            instance_type= ec2.InstanceType.of(
-                ec2.InstanceClass.MEMORY4,
-                ec2.InstanceSize.LARGE,
-            ),
-            removal_policy=cdk.RemovalPolicy.DESTROY,
-            deletion_protection=False,
-            security_groups=[db_connection_group]
+            enable_data_api=True
         )
-
-
-
-        # Create an RDS proxy
-        proxy = rds_instance.add_proxy('rdsProxy',
-                                       secrets=[rds_instance.secret],
-                                       debug_logging=True,
-                                       vpc=vpc,
-                                       vpc_subnets=ec2.SubnetSelection( subnet_type= ec2.SubnetType.PRIVATE),
-                                       security_groups=[db_connection_group])
-
-        # Workaround for bug where TargetGroupName is not set but required
-        target_group = proxy.node.find_child('ProxyTargetGroup')
-        target_group.add_property_override('TargetGroupName', 'default')
-
 
 
 
@@ -403,8 +353,8 @@ class OmnomStack(cdk.Stack):
                 'OUTPUT_TABLES': outputTables.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
                 'AWS_DATA_PATH' : 'models',
-                "DB_PROXY_ENDPOINT": proxy.endpoint,
-                "DB_SECRET_ARN": rds_instance.secret.secret_arn
+                "DB_CLUSTER_ARN": rdsCluster.cluster_arn,
+                "DB_SECRET_ARN": rdsCluster.secret.secret_arn
             }
         );
         # Layer
@@ -421,11 +371,9 @@ class OmnomStack(cdk.Stack):
         outputForms.grant_read_write_data(jobResultProcessor)
         outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
-        proxy.grant_connect(jobResultProcessor)
-        rds_instance.grant_connect(jobResultProcessor)
-        rds_instance.secret.grant_read(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)
+        rdsCluster.grant_data_api_access(jobResultProcessor)
         jobResultProcessor.add_to_role_policy(
             iam.PolicyStatement(
                 actions = ["textract:*"],

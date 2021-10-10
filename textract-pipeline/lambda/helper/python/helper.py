@@ -1,10 +1,11 @@
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 import os
 import csv
 import io
 import json
-import pymysql
+import time
 from boto3.dynamodb.conditions import Key
 
 class DynamoDBHelper:
@@ -242,22 +243,35 @@ class SecretsHelper:
 
         return secretDict
 
-class MySQLHelper:
+class AuroraHelper:
 
     @staticmethod
-    def getConn(dbSecretArn, dbProxyEndpoint):
-        dbConn = None
+    def wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10):
+        delay = 5
+        max_attempts = 10
 
-        # Connect to RDS Database
-        dbSecretDict = SecretsHelper.getSecretDict(dbSecretArn)
-        print(dbSecretDict)
-        dbConn = pymysql.connect(host=dbProxyEndpoint,
-                                port=3306,
-                                database=dbSecretDict['dbname'],
-                                user=dbSecretDict['username'],
-                                password=dbSecretDict['password'],
-                                connect_timeout=5)
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
 
-        return dbConn
+            try:
+                rdsData.execute_statement(
+                    resourceArn=dbCluserArn,
+                    secretArn=dbSecretArn,
+                    sql='SELECT version()'
+                )
+                return
+            except ClientError as ce:
+                error_code = ce.response.get("Error").get('Code')
+                error_msg = ce.response.get("Error").get('Message')
+
+                # Aurora serverless is waking up
+                if error_code == 'BadRequestException' and 'Communications link failure' in error_msg:
+                    print('Sleeping ' + str(delay) + ' secs, waiting RDS connection')
+                    time.sleep(delay)
+                else:
+                    raise ce
+
+        raise Exception('Waited for RDS Data but still getting error')
 
    

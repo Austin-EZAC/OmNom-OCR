@@ -2,7 +2,7 @@ import json
 import os
 import boto3
 import time
-from helper import AwsHelper, MySQLHelper
+from helper import AwsHelper
 from og import OutputGenerator
 import datastore
 
@@ -57,8 +57,8 @@ def processRequest(request):
     outputForms = request["outputForms"]
     outputTables = request["outputTables"]
     documentsTable = request["documentsTable"]
+    dbCluserArn = request["dbCluserArn"]
     dbSecretArn = request["dbSecretArn"]
-    dbProxyEndpoint = request["dbProxyEndpoint"]
 
     pages = getJobResults(jobAPI, jobId)
 
@@ -83,11 +83,8 @@ def processRequest(request):
     print("ddbTables: {}".format(ddbTables))
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
-    dbConn = MySQLHelper.getConn(dbSecretArn, dbProxyEndpoint)
-    print('dbConn Type: '.format(type(dbConn)))
-
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables, dbConn)
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables, dbCluserArn, dbSecretArn)
     print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
 
     opg.run()
@@ -128,8 +125,8 @@ def lambda_handler(event, context):
     request["outputForms"] = os.environ['OUTPUT_FORMS']
     request["outputTables"] = os.environ['OUTPUT_TABLES']
     request["documentsTable"] = os.environ['DOCUMENTS_TABLE']
+    request["dbCluserArn"] = os.environ['DB_CLUSTER_ARN']
     request["dbSecretArn"] = os.environ['DB_SECRET_ARN']
-    request["dbProxyEndpoint"] = os.environ['DB_PROXY_ENDPOINT']
 
     return processRequest(request)
 

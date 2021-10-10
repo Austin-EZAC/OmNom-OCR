@@ -38,7 +38,6 @@ class OmnomStack(cdk.Stack):
 
         # **********VPC******************************
         vpc = ec2.Vpc(self, "VPC")
-        vpc.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
 
 
         # **********SECURITY GROUPS**********
@@ -363,7 +362,7 @@ class OmnomStack(cdk.Stack):
         # Run async job processor every 5 minutes
         # Enable code below after test deploy
         rule = events.Rule(self, 'Rule',
-            schedule = events.Schedule.expression('rate(5 minutes)')
+            schedule = events.Schedule.expression('rate(2 minutes)')
         )
         rule.add_target(LambdaFunction(asyncProcessor))
         # Run when a job is successfully complete
@@ -414,8 +413,7 @@ class OmnomStack(cdk.Stack):
         # Triggers
         jobResultProcessor.add_event_source(
             SqsEventSource(jobResultsQueue,
-            batch_size = 1,
-            max_batching_window = cdk.Duration.seconds(120)
+            batch_size = 1
             )
         )
         # Permissions
@@ -423,6 +421,8 @@ class OmnomStack(cdk.Stack):
         outputForms.grant_read_write_data(jobResultProcessor)
         outputTables.grant_read_write_data(jobResultProcessor)
         documentsTable.grant_read_write_data(jobResultProcessor)
+        proxy.grant_connect(jobResultProcessor)
+        rds_instance.grant_connect(jobResultProcessor)
         rds_instance.secret.grant_read(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)

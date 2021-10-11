@@ -9,7 +9,6 @@ import aws_cdk.aws_rds as rds
 import aws_cdk.aws_sqs as sqs
 import aws_cdk.aws_lambda as lambda_        #Because lambda is a python-reserved word, we add an underscore for the package alias
 import aws_cdk.aws_events as events
-import aws_cdk.aws_ssm as ssm
 import aws_cdk.aws_secretsmanager as secrets
 from aws_cdk.aws_lambda_event_sources import S3EventSource, DynamoEventSource, SqsEventSource, SnsEventSource    # Trigger Lambda Functions these event 
 from aws_cdk.aws_events_targets import LambdaFunction

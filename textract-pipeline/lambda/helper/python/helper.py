@@ -246,9 +246,7 @@ class SecretsHelper:
 class AuroraHelper:
 
     @staticmethod
-    def wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10):
-        delay = 5
-        max_attempts = 10
+    def wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10, delay = 5):
 
         attempt = 0
         while attempt < max_attempts:

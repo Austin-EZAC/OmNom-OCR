@@ -122,17 +122,24 @@ class OutputGenerator:
         print("FINISHED TABLE FOR LOOP")
 
     def sqlTest(self):
+        # This is a demo to access an Aurora Serverless MySQL Database Cluster, insert records, and query rows
 
+        # Reterive the Cluster ARN and Secret ARN
         dbCluserArn = self.dbCluserArn
         dbSecretArn = self.dbSecretArn
 
         print('dbCluserArn: {}'.format(dbCluserArn))
         print('dbSecretArn: {}'.format(dbSecretArn))
 
-        testDb = 'test_db'
-        testTable = 'test_table'
+
+        # Access the Data API Client and wakeup the Aurora Cluster if currently inactive
         rdsData = boto3.client('rds-data')
         AuroraHelper.wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10)
+
+
+        # Create testing database and table
+        testDb = 'test_db'
+        testTable = 'test_table'
 
         sql = """
         CREATE DATABASE IF NOT EXISTS {};
@@ -158,7 +165,7 @@ class OutputGenerator:
         print(str(setupResponse))
 
 
-
+        #Insert a record into the testing table
         sql = """
         INSERT INTO {} (number) VALUES(:number)       
         """.format(testTable)
@@ -180,7 +187,7 @@ class OutputGenerator:
         print(str(insertResponse))
 
 
-
+        #Query the contents of the testing table
         sql = """select * from {}""".format(testTable)
 
         queryResponse = rdsData.execute_statement(

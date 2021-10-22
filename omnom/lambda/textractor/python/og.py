@@ -1,4 +1,5 @@
 import json
+import uuid
 from helper import FileHelper, S3Helper, AuroraHelper
 from trp import Document
 import boto3
@@ -121,7 +122,7 @@ class OutputGenerator:
 
         print("FINISHED TABLE FOR LOOP")
 
-    def sqlTest(self):
+    def aurora_upload(self):
         # This is a demo to access an Aurora Serverless MySQL Database Cluster, insert records, and query rows
 
         # Reterive the Cluster ARN and Secret ARN
@@ -138,12 +139,12 @@ class OutputGenerator:
 
 
         # Create testing database and table
-        testDb = 'test_db'
-        testTable = 'test_table'
+        dbName = 'omnom_aurora'
+        formTable = 'extracted_forms'
 
         sql = """
         CREATE DATABASE IF NOT EXISTS {};
-        """.format(testDb)
+        """.format(dbName)
 
         setupResponse = rdsData.execute_statement(
             resourceArn = dbCluserArn, 
@@ -153,33 +154,50 @@ class OutputGenerator:
         print(str(setupResponse))
 
         sql = """
-        CREATE TABLE IF NOT EXISTS {} (number INT);
-        """.format(testTable)
+        CREATE TABLE IF NOT EXISTS {} (
+            uuid VARCHAR(36),
+            document_id VARCHAR(255),
+            form_key VARCHAR(255),
+            form_value MEDIUMTEXT
+            );
+        """.format(formTable)
 
         setupResponse = rdsData.execute_statement(
             resourceArn = dbCluserArn, 
             secretArn = dbSecretArn,  
-            database = testDb, 
+            database = dbName, 
             sql = sql,
             continueAfterTimeout = True)
         print(str(setupResponse))
 
+        # Create a uuid to be inserted as the table primary key
+        recordId = str(uuid.uuid4())
 
         #Insert a record into the testing table
         sql = """
-        INSERT INTO {} (number) VALUES(:number)       
-        """.format(testTable)
+        INSERT INTO {} (uuid, 
+            document_id, 
+            form_key, 
+            form_value,
+            PRIMARY KEY (uuid)
+            ) VALUES(:uuid, :document_id, :form_key, :form_value)       
+        """.format(formTable)
 
-        param_set = []
-        param_set.append( {
-            'name': 'number',
-            'value': {'doubleValue': 1}
-            } )
+        param_set = [ 
+            {'name': 'uuid',
+            'value': {'stringValue': recordId} },
+            {'name': 'document_id',
+            'value': {'stringValue': "I am a document Id"} },
+            {'name': 'form_key',
+            'value': {'stringValue': "I am a form key"} },
+            {'name': 'form_value',
+            'value': {'stringValue': "I am a form value"} }
+        ]
         
         insertResponse = rdsData.execute_statement(
             resourceArn = dbCluserArn, 
             secretArn = dbSecretArn, 
-            database = testDb, 
+            database = dbName, 
             sql = sql,
             parameters = param_set)
 
@@ -188,16 +206,16 @@ class OutputGenerator:
 
 
         #Query the contents of the testing table
-        sql = """select * from {}""".format(testTable)
+        sql = """SELECT * FROM {}""".format(formTable)
 
         queryResponse = rdsData.execute_statement(
             resourceArn = dbCluserArn, 
             secretArn = dbSecretArn, 
-            database = testDb, 
+            database = dbName, 
             sql = sql)
         queryrecords = queryResponse['records']
 
-        print("Query Response: {}".format(queryResponse))
+        print("Query Response: {}".format(queryResponse)) 
         print("Query Records: {}".format(queryrecords))
 
 
@@ -252,7 +270,7 @@ class OutputGenerator:
 
     def run(self):
 
-        self.sqlTest()
+        self.aurora_upload()
 
         if(not self.document.pages):
             return

@@ -129,6 +129,7 @@ class OutputGenerator:
         dbCluserArn = self.dbCluserArn
         dbSecretArn = self.dbSecretArn
 
+        # These prints help for connecting to RDS SQL Query Editor. Not needed for long term use.
         print('dbCluserArn: {}'.format(dbCluserArn))
         print('dbSecretArn: {}'.format(dbSecretArn))
 
@@ -142,10 +143,12 @@ class OutputGenerator:
         dbName = 'omnom_aurora'
         formTable = 'extracted_forms'
 
+        # Create database if it does not already exist.
         sql = """
         CREATE DATABASE IF NOT EXISTS {};
         """.format(dbName)
 
+        # Executes SQL statement with parameters
         setupResponse = rdsData.execute_statement(
             resourceArn = dbCluserArn, 
             secretArn = dbSecretArn,  
@@ -153,6 +156,7 @@ class OutputGenerator:
             continueAfterTimeout = True)
         print(str(setupResponse))
 
+        # Creates and defines table structure
         sql = """
         CREATE TABLE IF NOT EXISTS {} (
             uuid VARCHAR(36),
@@ -173,7 +177,7 @@ class OutputGenerator:
         # Create a uuid to be inserted as the table primary key
         recordId = str(uuid.uuid4())
 
-        #Insert a record into the testing table
+        # Insert a record into the testing table
         sql = """
         INSERT INTO {} (uuid, 
             document_id, 
@@ -183,6 +187,7 @@ class OutputGenerator:
             ) VALUES(:uuid, :document_id, :form_key, :form_value)       
         """.format(formTable)
 
+        # Insert parameters. Not finished
         param_set = [ 
             {'name': 'uuid',
             'value': {'stringValue': recordId} },
@@ -270,6 +275,7 @@ class OutputGenerator:
 
     def run(self):
 
+        # aurora_upload is only half set up to import forms. That needs to be completed and a new function created to upload OmNom tables.
         self.aurora_upload()
 
         if(not self.document.pages):

@@ -10,3 +10,4 @@ node_modules
 cdk.out
 
 /env
+/src/__pycache__/

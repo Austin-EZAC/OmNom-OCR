@@ -57,13 +57,12 @@ def processRequest(request):
     outputForms = request["outputForms"]
     outputTables = request["outputTables"]
     documentsTable = request["documentsTable"]
+    dbCluserArn = request["dbCluserArn"]
+    dbSecretArn = request["dbSecretArn"]
 
     pages = getJobResults(jobAPI, jobId)
 
     print("Result pages recieved: {}".format(len(pages)))
-
-    #dynamodb = AwsHelper().getResource("dynamodb")
-    #ddb = dynamodb.Table(outputFiles)
 
     detectForms = False
     detectTables = False
@@ -85,7 +84,7 @@ def processRequest(request):
     print("FINISHED RUN DDB_FORM TABLE SEARCH")
 
     print("STARTED TO RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
-    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables)
+    opg = OutputGenerator(jobTag, pages, bucketName, objectName, detectForms, detectTables, ddbFiles, ddbForms, ddbTables, dbCluserArn, dbSecretArn)
     print("FINISHED RUN OUTPUT GENERATOR TABLE SEARCH WITH DDB_FORM")
 
     opg.run()
@@ -126,6 +125,8 @@ def lambda_handler(event, context):
     request["outputForms"] = os.environ['OUTPUT_FORMS']
     request["outputTables"] = os.environ['OUTPUT_TABLES']
     request["documentsTable"] = os.environ['DOCUMENTS_TABLE']
+    request["dbCluserArn"] = os.environ['DB_CLUSTER_ARN']
+    request["dbSecretArn"] = os.environ['DB_SECRET_ARN']
 
     return processRequest(request)
 

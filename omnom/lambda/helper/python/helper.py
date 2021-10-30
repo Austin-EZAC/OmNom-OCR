@@ -1,8 +1,11 @@
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
 import os
 import csv
 import io
+import json
+import time
 from boto3.dynamodb.conditions import Key
 
 class DynamoDBHelper:
@@ -226,3 +229,47 @@ class FileHelper:
             writer = csv.writer(csv_file)
             for item in csvData:
                 writer.writerow(item)
+
+
+class SecretsHelper:
+
+    @staticmethod
+    def getSecretDict(secretArn):
+        secretDict = None
+
+        secretsClient = boto3.client('secretsmanager')
+        secret =  secretsClient.get_secret_value(SecretId=secretArn)
+        secretDict = json.loads(secret['SecretString'])
+
+        return secretDict
+
+class AuroraHelper:
+
+    @staticmethod
+    def wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10, delay = 5):
+
+        attempt = 0
+        while attempt < max_attempts:
+            attempt += 1
+
+            try:
+                rdsData.execute_statement(
+                    resourceArn=dbCluserArn,
+                    secretArn=dbSecretArn,
+                    sql='SELECT version()'
+                )
+                return
+            except ClientError as ce:
+                error_code = ce.response.get("Error").get('Code')
+                error_msg = ce.response.get("Error").get('Message')
+
+                # Aurora serverless is waking up
+                if error_code == 'BadRequestException' and 'Communications link failure' in error_msg:
+                    print('Sleeping ' + str(delay) + ' secs, waiting RDS connection')
+                    time.sleep(delay)
+                else:
+                    raise ce
+
+        raise Exception('Waited for RDS Data but still getting error')
+
+   

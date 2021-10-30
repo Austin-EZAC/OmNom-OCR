@@ -1,10 +1,11 @@
 import json
-from helper import FileHelper, S3Helper
+import uuid
+from helper import FileHelper, S3Helper, AuroraHelper
 from trp import Document
 import boto3
 
 class OutputGenerator:
-    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables):
+    def __init__(self, documentId, response, bucketName, objectName, forms, tables, ddbFiles, ddbForms, ddbTables, dbCluserArn, dbSecretArn):
         self.documentId = documentId
         self.response = response
         self.bucketName = bucketName
@@ -14,6 +15,8 @@ class OutputGenerator:
         self.ddbFiles = ddbFiles
         self.ddbForms = ddbForms
         self.ddbTables = ddbTables
+        self.dbCluserArn = dbCluserArn
+        self.dbSecretArn = dbSecretArn
         print("FINISHED OUTPUT GENERATOR INIT WITH DDB_FORM")
 
         self.outputPath = "{}-analysis/{}/".format(objectName, documentId)
@@ -119,6 +122,108 @@ class OutputGenerator:
 
         print("FINISHED TABLE FOR LOOP")
 
+    def aurora_upload(self):
+        # This is a demo to access an Aurora Serverless MySQL Database Cluster, insert records, and query rows
+
+        # Reterive the Cluster ARN and Secret ARN
+        dbCluserArn = self.dbCluserArn
+        dbSecretArn = self.dbSecretArn
+
+        # These prints help for connecting to RDS SQL Query Editor. Not needed for long term use.
+        print('dbCluserArn: {}'.format(dbCluserArn))
+        print('dbSecretArn: {}'.format(dbSecretArn))
+
+
+        # Access the Data API Client and wakeup the Aurora Cluster if currently inactive
+        rdsData = boto3.client('rds-data')
+        AuroraHelper.wake_up_cluster(rdsData, dbCluserArn, dbSecretArn, max_attempts = 10)
+
+
+        # Create testing database and table
+        dbName = 'omnom_aurora'
+        formTable = 'extracted_forms'
+
+        # Create database if it does not already exist.
+        sql = """
+        CREATE DATABASE IF NOT EXISTS {};
+        """.format(dbName)
+
+        # Executes SQL statement with parameters
+        setupResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn,  
+            sql = sql,
+            continueAfterTimeout = True)
+        print(str(setupResponse))
+
+        # Creates and defines table structure
+        sql = """
+        CREATE TABLE IF NOT EXISTS {} (
+            uuid VARCHAR(36),
+            document_id VARCHAR(255),
+            form_key VARCHAR(255),
+            form_value MEDIUMTEXT
+            );
+        """.format(formTable)
+
+        setupResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn,  
+            database = dbName, 
+            sql = sql,
+            continueAfterTimeout = True)
+        print(str(setupResponse))
+
+        # Create a uuid to be inserted as the table primary key
+        recordId = str(uuid.uuid4())
+
+        # Insert a record into the testing table
+        sql = """
+        INSERT INTO {} (uuid, 
+            document_id, 
+            form_key, 
+            form_value,
+            PRIMARY KEY (uuid)
+            ) VALUES(:uuid, :document_id, :form_key, :form_value)       
+        """.format(formTable)
+
+        # Insert parameters. Not finished
+        param_set = [ 
+            {'name': 'uuid',
+            'value': {'stringValue': recordId} },
+            {'name': 'document_id',
+            'value': {'stringValue': "I am a document Id"} },
+            {'name': 'form_key',
+            'value': {'stringValue': "I am a form key"} },
+            {'name': 'form_value',
+            'value': {'stringValue': "I am a form value"} }
+        ]
+        
+        insertResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn, 
+            database = dbName, 
+            sql = sql,
+            parameters = param_set)
+
+        print('SQL INSERT COMPLETE')
+        print(str(insertResponse))
+
+
+        #Query the contents of the testing table
+        sql = """SELECT * FROM {}""".format(formTable)
+
+        queryResponse = rdsData.execute_statement(
+            resourceArn = dbCluserArn, 
+            secretArn = dbSecretArn, 
+            database = dbName, 
+            sql = sql)
+        queryrecords = queryResponse['records']
+
+        print("Query Response: {}".format(queryResponse)) 
+        print("Query Records: {}".format(queryrecords))
+
+
 
     def _outputText(self, page, p):
         text = page.text
@@ -169,6 +274,9 @@ class OutputGenerator:
         self.saveItem(self.documentId, "page-{}-Tables".format(p), opath)
 
     def run(self):
+
+        # aurora_upload is only half set up to import forms. That needs to be completed and a new function created to upload OmNom tables.
+        self.aurora_upload()
 
         if(not self.document.pages):
             return

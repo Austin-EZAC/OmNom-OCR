@@ -1,12 +1,15 @@
 import aws_cdk.core as cdk
+import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_sns as sns
 import aws_cdk.aws_sns_subscriptions as sns_subscriptions
 import aws_cdk.aws_iam as iam
 import aws_cdk.aws_s3 as s3
 import aws_cdk.aws_dynamodb as dynamodb
+import aws_cdk.aws_rds as rds
 import aws_cdk.aws_sqs as sqs
 import aws_cdk.aws_lambda as lambda_        #Because lambda is a python-reserved word, we add an underscore for the package alias
 import aws_cdk.aws_events as events
+import aws_cdk.aws_secretsmanager as secrets
 from aws_cdk.aws_lambda_event_sources import S3EventSource, DynamoEventSource, SqsEventSource, SnsEventSource    # Trigger Lambda Functions these event 
 from aws_cdk.aws_events_targets import LambdaFunction
 
@@ -23,11 +26,18 @@ class OmnomStack(cdk.Stack):
 
 
         # **********IAM Roles******************************
-        textractServiceRole = iam.Role(self, 'OmnomServiceRole', assumed_by=iam.ServicePrincipal('textract.amazonaws.com'))
+        textractServiceRole = iam.Role(self, 'TextractServiceRole', assumed_by=iam.ServicePrincipal('textract.amazonaws.com'))
         textractServiceRole.add_to_policy(iam.PolicyStatement(
             effect = iam.Effect.ALLOW,
             resources = [jobCompletionTopic.topic_arn],
             actions = ["sns:Publish"]))
+
+
+
+
+        # **********VPC******************************
+        vpc = ec2.Vpc(self, "VPC")
+
 
         # **********S3 Batch Operations Role******************************
         s3BatchOperationsRole = iam.Role(self, 'S3BatchOperationsRole', assumed_by=iam.ServicePrincipal('batchoperations.s3.amazonaws.com'))
@@ -77,6 +87,16 @@ class OmnomStack(cdk.Stack):
         outputForms.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         outputTables.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
         documentsTable.apply_removal_policy(cdk.RemovalPolicy.DESTROY)
+
+
+        
+        # **********RDS Databases******************************
+        # Aurora Serverless database cluster
+        rdsCluster = rds.ServerlessCluster(self, "OmnomCluster",
+            engine=rds.DatabaseClusterEngine.AURORA_MYSQL,
+            vpc=vpc,
+            enable_data_api=True
+        )
 
 
 
@@ -291,7 +311,7 @@ class OmnomStack(cdk.Stack):
         # Run async job processor every 5 minutes
         # Enable code below after test deploy
         rule = events.Rule(self, 'Rule',
-            schedule = events.Schedule.expression('rate(5 minutes)')
+            schedule = events.Schedule.expression('rate(2 minutes)')
         )
         rule.add_target(LambdaFunction(asyncProcessor))
         # Run when a job is successfully complete
@@ -324,12 +344,16 @@ class OmnomStack(cdk.Stack):
             memory_size = 2000,
             reserved_concurrent_executions = 50,
             timeout = cdk.Duration.seconds(900),
+            vpc = vpc,
+            vpc_subnets = ec2.SubnetSelection( subnet_type= ec2.SubnetType.PRIVATE),
             environment = {
                 'OUTPUT_FILES': outputFiles.table_name,
                 'OUTPUT_FORMS': outputForms.table_name,
                 'OUTPUT_TABLES': outputTables.table_name,
                 'DOCUMENTS_TABLE': documentsTable.table_name,
-                'AWS_DATA_PATH' : 'models'
+                'AWS_DATA_PATH' : 'models',
+                "DB_CLUSTER_ARN": rdsCluster.cluster_arn,
+                "DB_SECRET_ARN": rdsCluster.secret.secret_arn
             }
         );
         # Layer
@@ -348,6 +372,7 @@ class OmnomStack(cdk.Stack):
         documentsTable.grant_read_write_data(jobResultProcessor)
         contentBucket.grant_read_write(jobResultProcessor)
         existingContentBucket.grant_read_write(jobResultProcessor)
+        rdsCluster.grant_data_api_access(jobResultProcessor)
         jobResultProcessor.add_to_role_policy(
             iam.PolicyStatement(
                 actions = ["textract:*"],
@@ -369,3 +394,6 @@ class OmnomStack(cdk.Stack):
         existingContentBucket.grant_read_write(pdfGenerator)
         pdfGenerator.grant_invoke(syncProcessor)
         pdfGenerator.grant_invoke(asyncProcessor)
+
+
+        
